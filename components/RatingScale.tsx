@@ -5,6 +5,7 @@ import { useState } from 'react'
 interface RatingScaleProps {
   value: number
   onChange: (value: number) => void
+  compact?: boolean
 }
 
 const ratingColor = (n: number) => {
@@ -14,12 +15,12 @@ const ratingColor = (n: number) => {
   return 'bg-green-500'
 }
 
-export default function RatingScale({ value, onChange }: RatingScaleProps) {
+export default function RatingScale({ value, onChange, compact = false }: RatingScaleProps) {
   const [hovered, setHovered] = useState(0)
   const active = hovered || value
 
   return (
-    <div className="flex items-center gap-1.5" onMouseLeave={() => setHovered(0)}>
+    <div className={`flex items-center ${compact ? 'gap-1' : 'gap-1.5'}`} onMouseLeave={() => setHovered(0)}>
       {Array.from({ length: 10 }, (_, i) => i + 1).map(n => {
         const isActive = n <= active
         const isSelected = n === value
@@ -30,7 +31,7 @@ export default function RatingScale({ value, onChange }: RatingScaleProps) {
             onMouseEnter={() => setHovered(n)}
             onClick={() => onChange(n)}
             className={`
-              relative w-7 h-7 rounded text-xs font-bold transition-all duration-150
+              relative ${compact ? 'w-5 h-5' : 'w-7 h-7'} rounded text-xs font-bold transition-all duration-150
               ${isActive
                 ? `${ratingColor(active)} text-white scale-110 shadow-lg`
                 : 'bg-surface border border-border text-muted hover:border-accent'
@@ -42,7 +43,7 @@ export default function RatingScale({ value, onChange }: RatingScaleProps) {
           </button>
         )
       })}
-      {value > 0 && (
+      {!compact && value > 0 && (
         <span className="ml-1 text-sm text-muted">
           <span className={`font-bold ${ratingColor(value).replace('bg-', 'text-')}`}>{value}</span>
           /10

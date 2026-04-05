@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { getOrCreateSpreadsheet, getMovies, addMovie } from '@/lib/sheets'
+import { getOrCreateSpreadsheet, getMovies, addMovie, deleteMovie, updateMovieRating } from '@/lib/sheets'
 import type { Movie, MovieDetails } from '@/types'
 
 export async function GET(req: NextRequest) {
@@ -80,5 +80,41 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error(err)
     return NextResponse.json({ error: 'Failed to add movie' }, { status: 500 })
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session?.accessToken) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { title, dateAdded, profile = 'Default' } = await req.json()
+
+  try {
+    const spreadsheetId = await getOrCreateSpreadsheet(session.accessToken)
+    await deleteMovie(session.accessToken, spreadsheetId, profile, title, dateAdded)
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    console.error(err)
+    return NextResponse.json({ error: 'Failed to delete movie' }, { status: 500 })
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session?.accessToken) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { title, dateAdded, profile = 'Default', myRating } = await req.json()
+
+  try {
+    const spreadsheetId = await getOrCreateSpreadsheet(session.accessToken)
+    await updateMovieRating(session.accessToken, spreadsheetId, profile, title, dateAdded, Number(myRating))
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    console.error(err)
+    return NextResponse.json({ error: 'Failed to update rating' }, { status: 500 })
   }
 }

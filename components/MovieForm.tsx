@@ -7,12 +7,13 @@ import RatingScale from './RatingScale'
 
 interface MovieFormProps {
   profile: string
+  movies: Movie[]
   onAdded: (movie: Movie) => void
 }
 
 const CONTENT_TYPES: ContentType[] = ['feature', 'documentary', 'anime', 'animated', 'tvshow']
 
-export default function MovieForm({ profile, onAdded }: MovieFormProps) {
+export default function MovieForm({ profile, movies, onAdded }: MovieFormProps) {
   const [query, setQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [searching, setSearching] = useState(false)
@@ -28,6 +29,14 @@ export default function MovieForm({ profile, onAdded }: MovieFormProps) {
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const skipNextSearchRef = useRef(false)
+
+  // Check if selected movie already exists in the list
+  const isDuplicate = details
+    ? movies.some(m => m.title.toLowerCase() === details.title.toLowerCase())
+    : query.trim()
+    ? movies.some(m => m.title.toLowerCase() === query.trim().toLowerCase())
+    : false
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -41,24 +50,36 @@ export default function MovieForm({ profile, onAdded }: MovieFormProps) {
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    if (query.length < 2) {
-      setSearchResults([])
-      setShowDropdown(false)
+
+    if (skipNextSearchRef.current) {
+      skipNextSearchRef.current = false
       return
     }
+
+    if (query.length < 1) {
+      setSearchResults([])
+      setShowDropdown(false)
+      setSearching(false)
+      return
+    }
+
+    // Show dropdown immediately with searching state
+    setSearching(true)
+    setShowDropdown(true)
+
     debounceRef.current = setTimeout(async () => {
-      setSearching(true)
       const res = await fetch(`/api/tmdb?search=${encodeURIComponent(query)}`)
       const data = await res.json()
       setSearchResults(data.results || [])
-      setShowDropdown(true)
       setSearching(false)
     }, 400)
   }, [query])
 
   async function handleSelect(item: SearchResult) {
+    skipNextSearchRef.current = true
     setQuery(item.title)
     setShowDropdown(false)
+    setSearchResults([])
     setDetails(null)
     setLoadingDetails(true)
     const res = await fetch(`/api/tmdb?id=${item.tmdbId}&type=${item.mediaType}`)
@@ -110,42 +131,58 @@ export default function MovieForm({ profile, onAdded }: MovieFormProps) {
             type="text"
             value={query}
             onChange={handleQueryChange}
-            onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
+            onFocus={() => (searchResults.length > 0 || searching) && setShowDropdown(true)}
             placeholder="e.g. Inception"
             required
             className="w-full bg-surface border border-border rounded px-3 py-2 text-white placeholder-muted focus:outline-none focus:border-accent"
           />
-          {(searching || loadingDetails) && (
-            <span className="absolute right-3 top-2.5 text-xs text-muted animate-pulse">
-              {loadingDetails ? 'Loading...' : 'Searching...'}
-            </span>
+          {loadingDetails && (
+            <span className="absolute right-3 top-2.5 text-xs text-muted animate-pulse">Loading...</span>
           )}
 
           {/* Dropdown */}
-          {showDropdown && searchResults.length > 0 && (
-            <div className="absolute z-20 w-full mt-1 bg-card border border-border rounded-lg shadow-xl overflow-hidden max-h-72 overflow-y-auto">
-              {searchResults.map(item => (
-                <button
-                  key={item.tmdbId}
-                  type="button"
-                  onClick={() => handleSelect(item)}
-                  className="w-full flex items-center gap-3 px-3 py-2 hover:bg-surface text-left transition-colors"
-                >
-                  {item.posterUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.posterUrl} alt={item.title} className="w-8 h-12 object-cover rounded shrink-0" referrerPolicy="no-referrer" />
-                  ) : (
-                    <div className="w-8 h-12 bg-surface border border-border rounded shrink-0 flex items-center justify-center text-xs">🎬</div>
-                  )}
-                  <div className="min-w-0">
-                    <p className="text-white text-sm font-medium truncate">{item.title}</p>
-                    <p className="text-muted text-xs">{item.year} · {item.mediaType} {item.tmdbRating && `· ⭐ ${item.tmdbRating}`}</p>
-                  </div>
-                </button>
-              ))}
+          {showDropdown && (
+            <div className="absolute z-20 w-full mt-1 bg-card border border-border rounded-lg shadow-xl overflow-hidden max-h-80 overflow-y-auto">
+              {searching ? (
+                <div className="px-4 py-3 text-sm text-muted animate-pulse">Searching...</div>
+              ) : searchResults.length === 0 ? (
+                <div className="px-4 py-3 text-sm text-muted">No results found</div>
+              ) : (
+                searchResults.map(item => (
+                  <button
+                    key={item.tmdbId}
+                    type="button"
+                    onMouseDown={e => { e.preventDefault(); handleSelect(item) }}
+                    className="w-full flex items-center gap-3 px-3 py-2 hover:bg-surface text-left transition-colors"
+                  >
+                    {item.posterUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={item.posterUrl}
+                        alt={item.title}
+                        className="w-14 h-20 object-cover rounded shrink-0"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-14 h-20 bg-surface border border-border rounded shrink-0 flex items-center justify-center text-xs">🎬</div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-white text-sm font-medium truncate">{item.title}</p>
+                      <p className="text-muted text-xs capitalize">{item.year} · {item.mediaType} {item.tmdbRating && `· ⭐ ${item.tmdbRating}`}</p>
+                    </div>
+                  </button>
+                ))
+              )}
             </div>
           )}
         </div>
+
+        {/* Duplicate warning */}
+        {isDuplicate && (
+          <p className="mt-1.5 text-xs text-yellow-400 flex items-center gap-1">
+            ⚠ You are editing an existing entry
+          </p>
+        )}
 
         {/* Selected movie preview */}
         {details && (

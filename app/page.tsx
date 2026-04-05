@@ -57,6 +57,32 @@ export default function Home() {
     setMovies(prev => [...prev, movie])
   }
 
+  async function handleDeleteMovie(movie: Movie) {
+    const res = await fetch('/api/movies', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: movie.title, dateAdded: movie.dateAdded, profile: activeProfile }),
+    })
+    if (res.ok) {
+      setMovies(prev => prev.filter(m => !(m.title === movie.title && m.dateAdded === movie.dateAdded)))
+    }
+  }
+
+  async function handleUpdateRating(movie: Movie, rating: number) {
+    const res = await fetch('/api/movies', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: movie.title, dateAdded: movie.dateAdded, profile: activeProfile, myRating: rating }),
+    })
+    if (res.ok) {
+      setMovies(prev => prev.map(m =>
+        m.title === movie.title && m.dateAdded === movie.dateAdded
+          ? { ...m, myRating: rating }
+          : m
+      ))
+    }
+  }
+
   return (
     <div className="min-h-screen bg-surface">
       {/* Header */}
@@ -127,8 +153,14 @@ export default function Home() {
             {/* Tab Content */}
             {activeTab === 'tracker' && (
               <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-5">
-                <MovieForm profile={activeProfile} onAdded={handleMovieAdded} />
-                <MovieList movies={movies} loading={moviesLoading} />
+                <MovieForm profile={activeProfile} movies={movies} onAdded={handleMovieAdded} />
+                <MovieList
+                  movies={movies}
+                  loading={moviesLoading}
+                  onRefresh={fetchMovies}
+                  onDelete={handleDeleteMovie}
+                  onUpdateRating={handleUpdateRating}
+                />
               </div>
             )}
 

@@ -158,3 +158,71 @@ export async function addMovie(accessToken: string, spreadsheetId: string, profi
     },
   })
 }
+
+export async function deleteMovie(
+  accessToken: string,
+  spreadsheetId: string,
+  profile: string,
+  title: string,
+  dateAdded: string
+): Promise<void> {
+  const auth = getGoogleAuthClient(accessToken)
+  const sheets = google.sheets({ version: 'v4', auth })
+
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `'${profile}'!A2:E`,
+  })
+
+  const rows = res.data.values || []
+  const rowIndex = rows.findIndex(row => row[0] === title && row[4] === dateAdded)
+  if (rowIndex === -1) throw new Error('Movie not found')
+
+  const meta = await sheets.spreadsheets.get({ spreadsheetId })
+  const sheet = meta.data.sheets?.find(s => s.properties?.title === profile)
+  if (!sheet?.properties?.sheetId) throw new Error('Profile not found')
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [{
+        deleteDimension: {
+          range: {
+            sheetId: sheet.properties.sheetId,
+            dimension: 'ROWS',
+            startIndex: rowIndex + 1, // skip header row (0-indexed)
+            endIndex: rowIndex + 2,
+          },
+        },
+      }],
+    },
+  })
+}
+
+export async function updateMovieRating(
+  accessToken: string,
+  spreadsheetId: string,
+  profile: string,
+  title: string,
+  dateAdded: string,
+  rating: number
+): Promise<void> {
+  const auth = getGoogleAuthClient(accessToken)
+  const sheets = google.sheets({ version: 'v4', auth })
+
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `'${profile}'!A2:E`,
+  })
+
+  const rows = res.data.values || []
+  const rowIndex = rows.findIndex(row => row[0] === title && row[4] === dateAdded)
+  if (rowIndex === -1) throw new Error('Movie not found')
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'${profile}'!C${rowIndex + 2}`, // 1-based, +1 for header, +1 for 1-based
+    valueInputOption: 'RAW',
+    requestBody: { values: [[rating]] },
+  })
+}
