@@ -1,0 +1,143 @@
+'use client'
+
+import { useSession } from 'next-auth/react'
+import { useState, useEffect, useCallback } from 'react'
+import AuthButton from '@/components/AuthButton'
+import Logo from '@/components/Logo'
+import ProfileManager from '@/components/ProfileManager'
+import MovieForm from '@/components/MovieForm'
+import MovieList from '@/components/MovieList'
+import RecommendationsTab from '@/components/RecommendationsTab'
+import type { Movie } from '@/types'
+
+type Tab = 'tracker' | 'recommendations'
+
+export default function Home() {
+  const { data: session, status } = useSession()
+  const [activeTab, setActiveTab] = useState<Tab>('tracker')
+  const [profiles, setProfiles] = useState<string[]>([])
+  const [activeProfile, setActiveProfile] = useState('Default')
+  const [movies, setMovies] = useState<Movie[]>([])
+  const [moviesLoading, setMoviesLoading] = useState(false)
+
+  const fetchProfiles = useCallback(async () => {
+    const res = await fetch('/api/profiles')
+    if (res.ok) {
+      const data = await res.json()
+      setProfiles(data.profiles)
+      if (!data.profiles.includes(activeProfile)) {
+        setActiveProfile(data.profiles[0] || 'Default')
+      }
+    }
+  }, [activeProfile])
+
+  const fetchMovies = useCallback(async () => {
+    setMoviesLoading(true)
+    const res = await fetch(`/api/movies?profile=${encodeURIComponent(activeProfile)}`)
+    if (res.ok) {
+      const data = await res.json()
+      setMovies(data.movies)
+    }
+    setMoviesLoading(false)
+  }, [activeProfile])
+
+  useEffect(() => {
+    if (session) {
+      fetchProfiles()
+    }
+  }, [session, fetchProfiles])
+
+  useEffect(() => {
+    if (session && activeProfile) {
+      fetchMovies()
+    }
+  }, [session, activeProfile, fetchMovies])
+
+  function handleMovieAdded(movie: Movie) {
+    setMovies(prev => [...prev, movie])
+  }
+
+  return (
+    <div className="min-h-screen bg-surface">
+      {/* Header */}
+      <header className="border-b border-border bg-card sticky top-0 z-10">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <Logo size={32} />
+            <h1 className="text-xl font-bold text-white">
+              <span className="text-accent">Movie</span> Tracker
+            </h1>
+          </div>
+          <AuthButton />
+        </div>
+      </header>
+
+      <main className="max-w-5xl mx-auto px-4 py-6">
+        {status === 'loading' && (
+          <div className="flex items-center justify-center py-24">
+            <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+
+        {status === 'unauthenticated' && (
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <p className="text-5xl mb-4">🎬</p>
+            <h2 className="text-2xl font-bold text-white mb-2">Welcome to Movie Tracker</h2>
+            <p className="text-muted mb-6 max-w-sm">
+              Log your movies, get AI-powered recommendations, and sync everything to your Google Sheets.
+            </p>
+            <AuthButton />
+          </div>
+        )}
+
+        {status === 'authenticated' && (
+          <div className="space-y-5">
+            {/* Profile Manager */}
+            <ProfileManager
+              profiles={profiles}
+              activeProfile={activeProfile}
+              onSelect={setActiveProfile}
+              onProfilesChange={() => fetchProfiles()}
+            />
+
+            {/* Tabs */}
+            <div className="flex border-b border-border">
+              <button
+                onClick={() => setActiveTab('tracker')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'tracker'
+                    ? 'border-accent text-white'
+                    : 'border-transparent text-muted hover:text-white'
+                }`}
+              >
+                My List
+              </button>
+              <button
+                onClick={() => setActiveTab('recommendations')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'recommendations'
+                    ? 'border-accent text-white'
+                    : 'border-transparent text-muted hover:text-white'
+                }`}
+              >
+                Recommendations
+              </button>
+            </div>
+
+            {/* Tab Content */}
+            {activeTab === 'tracker' && (
+              <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-5">
+                <MovieForm profile={activeProfile} onAdded={handleMovieAdded} />
+                <MovieList movies={movies} loading={moviesLoading} />
+              </div>
+            )}
+
+            {activeTab === 'recommendations' && (
+              <RecommendationsTab profile={activeProfile} />
+            )}
+          </div>
+        )}
+      </main>
+    </div>
+  )
+}
