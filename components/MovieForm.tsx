@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import type { ContentType, Movie } from '@/types'
+import { useState, useEffect, useRef } from 'react'
+import type { ContentType, Movie, SearchResult, MovieDetails } from '@/types'
 import { CONTENT_TYPE_LABELS } from '@/types'
 import RatingScale from './RatingScale'
 
@@ -13,37 +13,75 @@ interface MovieFormProps {
 const CONTENT_TYPES: ContentType[] = ['feature', 'documentary', 'anime', 'animated', 'tvshow']
 
 export default function MovieForm({ profile, onAdded }: MovieFormProps) {
-  const [title, setTitle] = useState('')
+  const [query, setQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [searching, setSearching] = useState(false)
+  const [showDropdown, setShowDropdown] = useState(false)
+  const [details, setDetails] = useState<MovieDetails | null>(null)
+  const [loadingDetails, setLoadingDetails] = useState(false)
+
   const [type, setType] = useState<ContentType>('feature')
   const [rating, setRating] = useState(0)
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [fetchedData, setFetchedData] = useState<{ imdbRating: string; rottenTomatoes: string; genre: string } | null>(null)
-  const [fetching, setFetching] = useState(false)
 
-  async function handleTitleBlur() {
-    if (!title.trim()) return
-    setFetching(true)
-    setFetchedData(null)
-    const res = await fetch(`/api/omdb?title=${encodeURIComponent(title)}`)
-    const data = await res.json()
-    if (data.imdbRating && data.imdbRating !== 'N/A') {
-      setFetchedData(data)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const wrapperRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setShowDropdown(false)
+      }
     }
-    setFetching(false)
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (query.length < 2) {
+      setSearchResults([])
+      setShowDropdown(false)
+      return
+    }
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true)
+      const res = await fetch(`/api/tmdb?search=${encodeURIComponent(query)}`)
+      const data = await res.json()
+      setSearchResults(data.results || [])
+      setShowDropdown(true)
+      setSearching(false)
+    }, 400)
+  }, [query])
+
+  async function handleSelect(item: SearchResult) {
+    setQuery(item.title)
+    setShowDropdown(false)
+    setDetails(null)
+    setLoadingDetails(true)
+    const res = await fetch(`/api/tmdb?id=${item.tmdbId}&type=${item.mediaType}`)
+    const data: MovieDetails = await res.json()
+    setDetails(data)
+    setLoadingDetails(false)
+  }
+
+  function handleQueryChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setQuery(e.target.value)
+    if (details) setDetails(null)
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!title.trim()) return
+    if (!query.trim()) return
     setLoading(true)
     setError('')
 
     const res = await fetch('/api/movies', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: title.trim(), type, myRating: rating, myNotes: notes, profile }),
+      body: JSON.stringify({ title: query.trim(), type, myRating: rating, myNotes: notes, profile, details }),
     })
 
     const data = await res.json()
@@ -52,10 +90,10 @@ export default function MovieForm({ profile, onAdded }: MovieFormProps) {
       setError(data.error || 'Failed to add movie')
     } else {
       onAdded(data.movie)
-      setTitle('')
+      setQuery('')
+      setDetails(null)
       setRating(0)
       setNotes('')
-      setFetchedData(null)
     }
     setLoading(false)
   }
@@ -64,32 +102,74 @@ export default function MovieForm({ profile, onAdded }: MovieFormProps) {
     <form onSubmit={handleSubmit} className="bg-card border border-border rounded-lg p-5 space-y-4">
       <h2 className="text-lg font-semibold text-white">Add to List</h2>
 
-      {/* Title */}
+      {/* Search */}
       <div>
-        <label className="block text-sm text-muted mb-1">Title</label>
-        <div className="relative">
+        <label className="block text-sm text-muted mb-1">Search Title</label>
+        <div ref={wrapperRef} className="relative">
           <input
             type="text"
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            onBlur={handleTitleBlur}
+            value={query}
+            onChange={handleQueryChange}
+            onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
             placeholder="e.g. Inception"
             required
             className="w-full bg-surface border border-border rounded px-3 py-2 text-white placeholder-muted focus:outline-none focus:border-accent"
           />
-          {fetching && (
-            <span className="absolute right-3 top-2.5 text-xs text-muted animate-pulse">Fetching...</span>
+          {(searching || loadingDetails) && (
+            <span className="absolute right-3 top-2.5 text-xs text-muted animate-pulse">
+              {loadingDetails ? 'Loading...' : 'Searching...'}
+            </span>
+          )}
+
+          {/* Dropdown */}
+          {showDropdown && searchResults.length > 0 && (
+            <div className="absolute z-20 w-full mt-1 bg-card border border-border rounded-lg shadow-xl overflow-hidden max-h-72 overflow-y-auto">
+              {searchResults.map(item => (
+                <button
+                  key={item.tmdbId}
+                  type="button"
+                  onClick={() => handleSelect(item)}
+                  className="w-full flex items-center gap-3 px-3 py-2 hover:bg-surface text-left transition-colors"
+                >
+                  {item.posterUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={item.posterUrl} alt={item.title} className="w-8 h-12 object-cover rounded shrink-0" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="w-8 h-12 bg-surface border border-border rounded shrink-0 flex items-center justify-center text-xs">🎬</div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-white text-sm font-medium truncate">{item.title}</p>
+                    <p className="text-muted text-xs">{item.year} · {item.mediaType} {item.tmdbRating && `· ⭐ ${item.tmdbRating}`}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
           )}
         </div>
-        {fetchedData && (
-          <div className="mt-1.5 flex flex-wrap gap-2 text-xs">
-            <span className="text-yellow-400">IMDB {fetchedData.imdbRating}</span>
-            {fetchedData.rottenTomatoes && (
-              <span className="text-red-400">🍅 {fetchedData.rottenTomatoes}</span>
+
+        {/* Selected movie preview */}
+        {details && (
+          <div className="mt-2 p-3 bg-surface border border-border rounded-lg flex gap-3">
+            {details.posterUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={details.posterUrl} alt={query} className="w-12 object-cover rounded shrink-0" style={{ height: '72px' }} referrerPolicy="no-referrer" />
             )}
-            {fetchedData.genre && (
-              <span className="text-muted">{fetchedData.genre}</span>
-            )}
+            <div className="min-w-0 space-y-1">
+              <p className="text-white text-sm font-medium">
+                {query} {details.year && <span className="text-muted font-normal">({details.year})</span>}
+              </p>
+              {details.tagline && <p className="text-xs text-muted italic">{details.tagline}</p>}
+              <div className="flex flex-wrap gap-2 text-xs">
+                {details.tmdbRating && <span className="text-blue-400">TMDB {details.tmdbRating}</span>}
+                {details.imdbRating !== 'N/A' && details.imdbRating && <span className="text-yellow-400">⭐ {details.imdbRating}</span>}
+                {details.rottenTomatoes && <span className="text-red-400">🍅 {details.rottenTomatoes}</span>}
+                {details.metacritic && <span className="text-green-400">🎯 {details.metacritic}</span>}
+                {details.runtime && <span className="text-muted">{details.runtime}</span>}
+                {details.rated && <span className="text-muted border border-border px-1 rounded">{details.rated}</span>}
+              </div>
+              {details.genre && <p className="text-xs text-muted">{details.genre}</p>}
+              {details.director && <p className="text-xs text-muted">Dir. {details.director}</p>}
+            </div>
           </div>
         )}
       </div>
@@ -115,7 +195,7 @@ export default function MovieForm({ profile, onAdded }: MovieFormProps) {
         </div>
       </div>
 
-      {/* Rating Scale */}
+      {/* Rating */}
       <div>
         <label className="block text-sm text-muted mb-2">My Rating</label>
         <RatingScale value={rating} onChange={setRating} />
@@ -137,7 +217,7 @@ export default function MovieForm({ profile, onAdded }: MovieFormProps) {
 
       <button
         type="submit"
-        disabled={loading || !title.trim()}
+        disabled={loading || !query.trim()}
         className="w-full bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-2 rounded transition-colors"
       >
         {loading ? 'Saving...' : 'Add to List'}

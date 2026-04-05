@@ -57,38 +57,68 @@ export default function MovieList({ movies, loading }: MovieListProps) {
             )}
 
             {/* Info */}
-            <div className="flex-1 min-w-0 flex flex-col justify-between">
-              <div>
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="text-white font-medium">{movie.title}</h3>
-                  <div className="text-right shrink-0 space-y-0.5">
-                    {movie.myRating > 0 && (
-                      <div className="text-white font-bold">{movie.myRating}<span className="text-muted text-sm">/10</span></div>
-                    )}
-                    {movie.imdbRating && movie.imdbRating !== 'N/A' && (
-                      <div className="text-xs text-yellow-400">⭐ IMDB {movie.imdbRating}</div>
-                    )}
-                    {movie.rottenTomatoes && (
-                      <div className="text-xs text-red-400">🍅 {movie.rottenTomatoes}</div>
-                    )}
+            <div className="flex-1 min-w-0">
+              {/* Title row */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <h3 className="text-white font-medium leading-tight">
+                    {movie.title}
+                    {movie.year && <span className="text-muted font-normal ml-1.5 text-sm">({movie.year})</span>}
+                  </h3>
+                  {movie.director && <p className="text-xs text-muted mt-0.5">Dir. {movie.director}</p>}
+                </div>
+                {/* My rating */}
+                {movie.myRating > 0 && (
+                  <div className="shrink-0 text-right">
+                    <div className="text-white font-bold">{movie.myRating}<span className="text-muted text-sm">/10</span></div>
+                    <div className="text-xs text-muted">my rating</div>
                   </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 mt-1">
-                  <span className="text-xs bg-surface border border-border rounded px-2 py-0.5 text-muted">
-                    {CONTENT_TYPE_LABELS[movie.type]}
-                  </span>
-                  {movie.genre && (
-                    <span className="text-xs text-muted">{movie.genre}</span>
-                  )}
-                </div>
-                {movie.plot && (
-                  <p className="text-sm text-gray-400 mt-1.5 line-clamp-2">{movie.plot}</p>
-                )}
-                {movie.myNotes && (
-                  <p className="text-sm text-muted mt-1 italic">"{movie.myNotes}"</p>
                 )}
               </div>
-              <p className="text-xs text-muted mt-2">{movie.dateAdded}</p>
+
+              {/* Badges */}
+              <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                <span className="text-xs bg-surface border border-border rounded px-2 py-0.5 text-muted">
+                  {CONTENT_TYPE_LABELS[movie.type]}
+                </span>
+                {movie.rated && (
+                  <span className="text-xs border border-border rounded px-1.5 py-0.5 text-muted">{movie.rated}</span>
+                )}
+                {movie.runtime && <span className="text-xs text-muted">{movie.runtime}</span>}
+                {movie.genre && <span className="text-xs text-muted">{movie.genre}</span>}
+              </div>
+
+              {/* Ratings row */}
+              <div className="flex flex-wrap gap-3 mt-1.5 text-xs">
+                {movie.imdbRating && movie.imdbRating !== 'N/A' && (
+                  <span className="text-yellow-400">⭐ IMDB {movie.imdbRating}</span>
+                )}
+                {movie.rottenTomatoes && (
+                  <span className="text-red-400">🍅 {movie.rottenTomatoes}</span>
+                )}
+                {movie.metacritic && (
+                  <span className="text-green-400">🎯 {movie.metacritic}</span>
+                )}
+                {movie.boxOffice && movie.boxOffice !== 'N/A' && (
+                  <span className="text-muted">💰 {movie.boxOffice}</span>
+                )}
+              </div>
+
+              {/* Plot */}
+              {movie.plot && (
+                <p className="text-xs text-gray-400 mt-1.5 line-clamp-2">{movie.plot}</p>
+              )}
+
+              {/* Notes */}
+              {movie.myNotes && (
+                <p className="text-xs text-muted mt-1 italic">"{movie.myNotes}"</p>
+              )}
+
+              {/* Footer */}
+              <div className="flex gap-3 mt-2 text-xs text-muted">
+                {movie.actors && <span className="truncate">{movie.actors}</span>}
+              </div>
+              <p className="text-xs text-muted/50 mt-1">{movie.dateAdded}</p>
             </div>
           </div>
         </div>

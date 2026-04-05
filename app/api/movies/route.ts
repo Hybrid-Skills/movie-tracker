@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getOrCreateSpreadsheet, getMovies, addMovie } from '@/lib/sheets'
-import { fetchMovieData } from '@/lib/omdb'
-import type { Movie } from '@/types'
+import type { Movie, MovieDetails } from '@/types'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -30,32 +29,53 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { title, type, myRating, myNotes, profile = 'Default' } = body
+  const { title, type, myRating, myNotes, profile = 'Default', details } = body as {
+    title: string
+    type: string
+    myRating: number
+    myNotes: string
+    profile: string
+    details: MovieDetails | null
+  }
 
   if (!title || !type) {
     return NextResponse.json({ error: 'Title and type are required' }, { status: 400 })
   }
 
+  const movie: Movie = {
+    title,
+    type: type as Movie['type'],
+    myRating: Number(myRating) || 0,
+    myNotes: myNotes || '',
+    dateAdded: new Date().toISOString().split('T')[0],
+    imdbId:         details?.imdbId         || '',
+    year:           details?.year           || '',
+    rated:          details?.rated          || '',
+    released:       details?.released       || '',
+    runtime:        details?.runtime        || '',
+    genre:          details?.genre          || '',
+    director:       details?.director       || '',
+    writer:         details?.writer         || '',
+    actors:         details?.actors         || '',
+    plot:           details?.plot           || '',
+    language:       details?.language       || '',
+    country:        details?.country        || '',
+    awards:         details?.awards         || '',
+    posterUrl:      details?.posterUrl      || '',
+    imdbRating:     details?.imdbRating     || 'N/A',
+    rottenTomatoes: details?.rottenTomatoes || '',
+    metacritic:     details?.metacritic     || '',
+    imdbVotes:      details?.imdbVotes      || '',
+    boxOffice:      details?.boxOffice      || '',
+    tmdbId:         details?.tmdbId         || '',
+    tmdbRating:     details?.tmdbRating     || '',
+    tmdbVotes:      details?.tmdbVotes      || '',
+    tagline:        details?.tagline        || '',
+  }
+
   try {
-    // Fetch IMDB data from OMDB
-    const omdbData = await fetchMovieData(title)
-
-    const movie: Movie = {
-      title,
-      type,
-      myRating: Number(myRating) || 0,
-      myNotes: myNotes || '',
-      imdbRating: omdbData?.imdbRating || 'N/A',
-      rottenTomatoes: omdbData?.rottenTomatoes || '',
-      genre: omdbData?.genre || '',
-      plot: omdbData?.plot || '',
-      dateAdded: new Date().toISOString().split('T')[0],
-      posterUrl: omdbData?.posterUrl || '',
-    }
-
     const spreadsheetId = await getOrCreateSpreadsheet(session.accessToken)
     await addMovie(session.accessToken, spreadsheetId, profile, movie)
-
     return NextResponse.json({ success: true, movie })
   } catch (err) {
     console.error(err)
