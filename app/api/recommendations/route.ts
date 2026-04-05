@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '../auth/[...nextauth]/route'
+import { authOptions } from '@/lib/auth'
 import { getOrCreateSpreadsheet, getMovies } from '@/lib/sheets'
 import { getRecommendations } from '@/lib/claude'
 import type { ContentType } from '@/types'
