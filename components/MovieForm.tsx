@@ -96,6 +96,10 @@ export default function MovieForm({ profile, movies, onAdded }: MovieFormProps) 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!query.trim()) return
+    if (rating === 0) {
+      setError('Please add a rating before saving')
+      return
+    }
     setLoading(true)
     setError('')
 
@@ -254,7 +258,7 @@ export default function MovieForm({ profile, movies, onAdded }: MovieFormProps) 
 
       <button
         type="submit"
-        disabled={loading || !query.trim()}
+        disabled={loading || !query.trim() || rating === 0}
         className="w-full bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-2 rounded transition-colors"
       >
         {loading ? 'Saving...' : 'Add to List'}

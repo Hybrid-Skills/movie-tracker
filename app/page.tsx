@@ -1,7 +1,7 @@
 'use client'
 
 import { useSession } from 'next-auth/react'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import AuthButton from '@/components/AuthButton'
 import Logo from '@/components/Logo'
 import ProfileManager from '@/components/ProfileManager'
@@ -20,38 +20,48 @@ export default function Home() {
   const [movies, setMovies] = useState<Movie[]>([])
   const [moviesLoading, setMoviesLoading] = useState(false)
 
-  const fetchProfiles = useCallback(async () => {
-    const res = await fetch('/api/profiles')
-    if (res.ok) {
-      const data = await res.json()
-      setProfiles(data.profiles)
-      if (!data.profiles.includes(activeProfile)) {
-        setActiveProfile(data.profiles[0] || 'Default')
-      }
-    }
-  }, [activeProfile])
+  const activeProfileRef = useRef(activeProfile)
+  activeProfileRef.current = activeProfile
 
-  const fetchMovies = useCallback(async () => {
+  async function fetchMovies() {
     setMoviesLoading(true)
-    const res = await fetch(`/api/movies?profile=${encodeURIComponent(activeProfile)}`)
+    const res = await fetch(`/api/movies?profile=${encodeURIComponent(activeProfileRef.current)}`)
     if (res.ok) {
       const data = await res.json()
       setMovies(data.movies)
     }
     setMoviesLoading(false)
-  }, [activeProfile])
+  }
 
   useEffect(() => {
-    if (session) {
-      fetchProfiles()
+    if (!session) return
+    let cancelled = false
+    async function loadProfiles() {
+      const res = await fetch('/api/profiles')
+      if (!res.ok || cancelled) return
+      const data = await res.json()
+      setProfiles(data.profiles)
+      setActiveProfile(prev => data.profiles.includes(prev) ? prev : (data.profiles[0] || 'Default'))
     }
-  }, [session, fetchProfiles])
+    loadProfiles()
+    return () => { cancelled = true }
+  }, [session])
 
   useEffect(() => {
-    if (session && activeProfile) {
-      fetchMovies()
+    if (!session || !activeProfile) return
+    let cancelled = false
+    async function loadMovies() {
+      setMoviesLoading(true)
+      const res = await fetch(`/api/movies?profile=${encodeURIComponent(activeProfile)}`)
+      if (!cancelled && res.ok) {
+        const data = await res.json()
+        setMovies(data.movies)
+      }
+      if (!cancelled) setMoviesLoading(false)
     }
-  }, [session, activeProfile, fetchMovies])
+    loadMovies()
+    return () => { cancelled = true }
+  }, [session, activeProfile])
 
   function handleMovieAdded(movie: Movie) {
     setMovies(prev => [...prev, movie])
@@ -123,7 +133,14 @@ export default function Home() {
               profiles={profiles}
               activeProfile={activeProfile}
               onSelect={setActiveProfile}
-              onProfilesChange={() => fetchProfiles()}
+              onProfilesChange={async () => {
+                const res = await fetch('/api/profiles')
+                if (res.ok) {
+                  const data = await res.json()
+                  setProfiles(data.profiles)
+                  setActiveProfile(prev => data.profiles.includes(prev) ? prev : (data.profiles[0] || 'Default'))
+                }
+              }}
             />
 
             {/* Tabs */}
@@ -157,7 +174,7 @@ export default function Home() {
                 <MovieList
                   movies={movies}
                   loading={moviesLoading}
-                  onRefresh={fetchMovies}
+                  onRefresh={() => fetchMovies()}
                   onDelete={handleDeleteMovie}
                   onUpdateRating={handleUpdateRating}
                 />

@@ -92,7 +92,8 @@ export default function MovieList({ movies, loading, onRefresh, onDelete, onUpda
           return (
             <div
               key={i}
-              className="bg-card border border-border rounded-lg p-4 hover:border-accent/40 transition-colors group"
+              onClick={() => !isEditing && setSelectedMovie(movie)}
+              className="bg-card border border-border rounded-lg p-4 hover:border-accent/40 transition-colors group cursor-pointer"
             >
               <div className="flex gap-4">
                 {/* Poster */}
@@ -132,7 +133,7 @@ export default function MovieList({ movies, loading, onRefresh, onDelete, onUpda
                     </button>
 
                     {/* Rating + inline edit */}
-                    <div className="shrink-0">
+                    <div className="shrink-0" onClick={e => e.stopPropagation()}>
                       {isEditing ? (
                         <div className="flex flex-col items-end gap-1.5">
                           <RatingScale value={pendingRating} onChange={setPendingRating} compact />
@@ -203,7 +204,7 @@ export default function MovieList({ movies, loading, onRefresh, onDelete, onUpda
                   {/* Read more + date */}
                   <div className="flex items-center justify-between mt-2">
                     <button
-                      onClick={() => setSelectedMovie(movie)}
+                      onClick={e => { e.stopPropagation(); setSelectedMovie(movie) }}
                       className="text-xs text-accent hover:underline"
                     >
                       Read more
